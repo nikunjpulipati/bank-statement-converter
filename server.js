@@ -8,9 +8,7 @@ const fs = require('fs');
 const os = require('os');
 
 const app = express();
-
-// Use memory storage — works on Railway (no disk write needed)
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ dest: os.tmpdir() });
 
 app.use(express.static('public'));
 
@@ -49,45 +47,37 @@ app.get('/usage', (req, res) => {
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-  // Check free limit
   const used = checkUsage(req);
   if (used >= FREE_LIMIT) {
+    fs.unlinkSync(req.file.path);
     return res.status(429).json({ error: 'limit_reached' });
   }
 
   const password = req.body.password || '';
-
-  // Write buffer to temp files
-  const tmpPdf = path.join(os.tmpdir(), `upload_${Date.now()}.pdf`);
-  const tmpDecrypted = path.join(os.tmpdir(), `decrypted_${Date.now()}.pdf`);
+  const pdfPath = req.file.path;
+  const decryptedPath = pdfPath + '_decrypted.pdf';
 
   try {
-    // Write uploaded buffer to temp file
-    fs.writeFileSync(tmpPdf, req.file.buffer);
-
-    // Decrypt with pikepdf
     await new Promise((resolve, reject) => {
-      execFile('/usr/bin/python3', [
+      execFile('python3', [
         path.join(__dirname, 'decrypt.py'),
-        tmpPdf,
-        tmpDecrypted,
+        pdfPath,
+        decryptedPath,
         password
       ], (err, stdout, stderr) => {
         const output = (stdout || '').trim();
-        console.log('decrypt output:', output, 'stderr:', stderr, 'err:', err);
         if (output === 'ok') resolve();
         else if (output === 'wrong_password') reject(new Error('wrong_password'));
-        else reject(new Error('decrypt_failed: ' + output + ' ' + stderr));
+        else reject(new Error('decrypt_failed'));
       });
     });
 
-    const dataBuffer = fs.readFileSync(tmpDecrypted);
+    const dataBuffer = fs.readFileSync(decryptedPath);
     const pdfData = await pdfParse(dataBuffer);
     const rows = parseTransactions(pdfData.text);
 
-    // Cleanup temp files
-    if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf);
-    if (fs.existsSync(tmpDecrypted)) fs.unlinkSync(tmpDecrypted);
+    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+    if (fs.existsSync(decryptedPath)) fs.unlinkSync(decryptedPath);
 
     if (rows.length === 0) {
       return res.status(400).json({ error: 'No transactions found. The PDF format may not be supported yet.' });
@@ -104,22 +94,21 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
 
-    // Write xlsx to temp and stream back
-    const tmpXlsx = path.join(os.tmpdir(), `output_${Date.now()}.xlsx`);
-    XLSX.writeFile(wb, tmpXlsx);
+    const outPath = path.join(os.tmpdir(), `${req.file.filename}.xlsx`);
+    XLSX.writeFile(wb, outPath);
 
-    res.download(tmpXlsx, 'bank_statement.xlsx', () => {
-      if (fs.existsSync(tmpXlsx)) fs.unlinkSync(tmpXlsx);
+    res.download(outPath, 'bank_statement.xlsx', () => {
+      if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
     });
 
   } catch (err) {
-    if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf);
-    if (fs.existsSync(tmpDecrypted)) fs.unlinkSync(tmpDecrypted);
+    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+    if (fs.existsSync(decryptedPath)) fs.unlinkSync(decryptedPath);
 
     if (err.message === 'wrong_password') {
       return res.status(400).json({ error: 'Wrong password. Please try again.' });
     }
-    console.error('Upload error:', err.message);
+    console.error('Error:', err.message);
     res.status(500).json({ error: 'Failed to process PDF.' });
   }
 });

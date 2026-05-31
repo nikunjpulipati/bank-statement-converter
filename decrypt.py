@@ -1,4 +1,5 @@
 import sys
+sys.path.insert(0, '/opt/render/project/src/pip_packages')
 import pikepdf
 
 input_path = sys.argv[1]
