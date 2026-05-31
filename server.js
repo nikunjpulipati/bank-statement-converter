@@ -5,14 +5,14 @@ const XLSX = require('xlsx');
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+
+// Use memory storage — works on Railway (no disk write needed)
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.static('public'));
-
-// Ensure uploads folder exists
-if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
 // IP-based usage tracking
 const usageMap = {};
@@ -52,42 +52,47 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
   // Check free limit
   const used = checkUsage(req);
   if (used >= FREE_LIMIT) {
-    fs.unlinkSync(req.file.path);
     return res.status(429).json({ error: 'limit_reached' });
   }
 
   const password = req.body.password || '';
-  const pdfPath = req.file.path;
-  const decryptedPath = pdfPath + '_decrypted.pdf';
+
+  // Write buffer to temp files
+  const tmpPdf = path.join(os.tmpdir(), `upload_${Date.now()}.pdf`);
+  const tmpDecrypted = path.join(os.tmpdir(), `decrypted_${Date.now()}.pdf`);
 
   try {
+    // Write uploaded buffer to temp file
+    fs.writeFileSync(tmpPdf, req.file.buffer);
+
+    // Decrypt with pikepdf
     await new Promise((resolve, reject) => {
-      execFile('python3', [
+      execFile('/usr/bin/python3', [
         path.join(__dirname, 'decrypt.py'),
-        pdfPath,
-        decryptedPath,
+        tmpPdf,
+        tmpDecrypted,
         password
       ], (err, stdout, stderr) => {
         const output = (stdout || '').trim();
-        console.log('decrypt output:', output, 'stderr:', stderr, 'execerr:', err);
+        console.log('decrypt output:', output, 'stderr:', stderr, 'err:', err);
         if (output === 'ok') resolve();
         else if (output === 'wrong_password') reject(new Error('wrong_password'));
-        else reject(new Error('decrypt_failed'));
+        else reject(new Error('decrypt_failed: ' + output + ' ' + stderr));
       });
     });
 
-    const dataBuffer = fs.readFileSync(decryptedPath);
+    const dataBuffer = fs.readFileSync(tmpDecrypted);
     const pdfData = await pdfParse(dataBuffer);
     const rows = parseTransactions(pdfData.text);
 
-    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
-    if (fs.existsSync(decryptedPath)) fs.unlinkSync(decryptedPath);
+    // Cleanup temp files
+    if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf);
+    if (fs.existsSync(tmpDecrypted)) fs.unlinkSync(tmpDecrypted);
 
     if (rows.length === 0) {
       return res.status(400).json({ error: 'No transactions found. The PDF format may not be supported yet.' });
     }
 
-    // Count successful conversion
     incrementUsage(req);
 
     const wb = XLSX.utils.book_new();
@@ -99,21 +104,22 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     ws['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
 
-    const outPath = path.join('uploads', `${req.file.filename}.xlsx`);
-    XLSX.writeFile(wb, outPath);
+    // Write xlsx to temp and stream back
+    const tmpXlsx = path.join(os.tmpdir(), `output_${Date.now()}.xlsx`);
+    XLSX.writeFile(wb, tmpXlsx);
 
-    res.download(outPath, 'bank_statement.xlsx', () => {
-      if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+    res.download(tmpXlsx, 'bank_statement.xlsx', () => {
+      if (fs.existsSync(tmpXlsx)) fs.unlinkSync(tmpXlsx);
     });
 
   } catch (err) {
-    if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
-    if (fs.existsSync(decryptedPath)) fs.unlinkSync(decryptedPath);
+    if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf);
+    if (fs.existsSync(tmpDecrypted)) fs.unlinkSync(tmpDecrypted);
 
     if (err.message === 'wrong_password') {
       return res.status(400).json({ error: 'Wrong password. Please try again.' });
     }
-    console.error(err);
+    console.error('Upload error:', err.message);
     res.status(500).json({ error: 'Failed to process PDF.' });
   }
 });
@@ -142,5 +148,5 @@ function parseTransactions(text) {
   return rows;
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`BankPDF running at http://localhost:${PORT}`));
