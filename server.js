@@ -11,6 +11,9 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(express.static('public'));
 
+// Ensure uploads folder exists
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+
 // IP-based usage tracking
 const usageMap = {};
 const FREE_LIMIT = 5;
@@ -59,13 +62,14 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 
   try {
     await new Promise((resolve, reject) => {
-      execFile('/usr/bin/python3', [
+      execFile('python3', [
         path.join(__dirname, 'decrypt.py'),
         pdfPath,
         decryptedPath,
         password
       ], (err, stdout, stderr) => {
         const output = (stdout || '').trim();
+        console.log('decrypt output:', output, 'stderr:', stderr, 'execerr:', err);
         if (output === 'ok') resolve();
         else if (output === 'wrong_password') reject(new Error('wrong_password'));
         else reject(new Error('decrypt_failed'));
