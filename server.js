@@ -59,7 +59,7 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 
   try {
     await new Promise((resolve, reject) => {
-      execFile('python3', [
+      execFile('/usr/bin/python3', [
         path.join(__dirname, 'decrypt.py'),
         pdfPath,
         decryptedPath,
