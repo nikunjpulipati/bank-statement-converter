@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BankPDF</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 36px 40px;
+      width: 420px;
+      text-align: center;
+    }
+    h1 { font-size: 22px; margin-bottom: 6px; }
+    p.sub { color: #666; font-size: 14px; margin-bottom: 24px; }
+
+    .drop-zone {
+      border: 2px dashed #bbb;
+      border-radius: 6px;
+      padding: 32px 20px;
+      cursor: pointer;
+      color: #888;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .drop-zone.dragover { border-color: #333; background: #fafafa; }
+    .drop-zone.selected { border-color: #2a7ae2; color: #2a7ae2; }
+
+    input[type="file"] { display: none; }
+
+    .password-wrap {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .password-wrap label {
+      font-size: 13px;
+      color: #555;
+      display: block;
+      margin-bottom: 5px;
+    }
+    .password-wrap input[type="text"],
+    .password-wrap input[type="password"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .show-pw {
+      font-size: 12px;
+      color: #2a7ae2;
+      cursor: pointer;
+      margin-top: 4px;
+      display: inline-block;
+    }
+
+    button {
+      background: #2a7ae2;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 28px;
+      font-size: 15px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+
+    #status {
+      margin-top: 14px;
+      font-size: 14px;
+      min-height: 20px;
+      color: #333;
+    }
+    #status.error { color: #c0392b; }
+    #status.success { color: #27ae60; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>BankPDF</h1>
+  <p class="sub">Upload a bank statement PDF → Download Excel</p>
+
+  <div class="drop-zone" id="dropZone">
+    <span id="dropLabel">Click to select or drag & drop PDF</span>
+  </div>
+  <input type="file" id="fileInput" accept=".pdf" />
+
+  <div class="password-wrap">
+    <label for="pdfPassword">PDF Password <span style="color:#aaa">(leave blank if none)</span></label>
+    <input type="password" id="pdfPassword" placeholder="Enter password if PDF is locked" />
+    <span class="show-pw" id="togglePw">Show password</span>
+  </div>
+
+  <button id="convertBtn" disabled>Convert to Excel</button>
+  <div id="status"></div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const convertBtn = document.getElementById('convertBtn');
+  const dropLabel = document.getElementById('dropLabel');
+  const status = document.getElementById('status');
+  const pdfPassword = document.getElementById('pdfPassword');
+  const togglePw = document.getElementById('togglePw');
+  let selectedFile = null;
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') setFile(file);
+    else showError('Please drop a PDF file.');
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  togglePw.addEventListener('click', () => {
+    const isPassword = pdfPassword.type === 'password';
+    pdfPassword.type = isPassword ? 'text' : 'password';
+    togglePw.textContent = isPassword ? 'Hide password' : 'Show password';
+  });
+
+  function setFile(file) {
+    selectedFile = file;
+    dropLabel.textContent = file.name;
+    dropZone.classList.add('selected');
+    convertBtn.disabled = false;
+    status.textContent = '';
+    status.className = '';
+  }
+
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    convertBtn.disabled = true;
+    status.textContent = 'Processing...';
+    status.className = '';
+
+    const formData = new FormData();
+    formData.append('pdf', selectedFile);
+    formData.append('password', pdfPassword.value);
+
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        showError(err.error || 'Something went wrong.');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bank_statement.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      status.textContent = 'Done! Excel downloaded.';
+      status.className = 'success';
+    } catch (e) {
+      showError('Server error. Is the server running?');
+    } finally {
+      convertBtn.disabled = false;
+    }
+  });
+
+  function showError(msg) {
+    status.textContent = msg;
+    status.className = 'error';
+  }
+</script>
+</body>
+</html>
