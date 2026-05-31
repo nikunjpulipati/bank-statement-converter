@@ -11,17 +11,53 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(express.static('public'));
 
+// IP-based usage tracking
+const usageMap = {};
+const FREE_LIMIT = 5;
+
+function getMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}`;
+}
+
+function getIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+}
+
+function checkUsage(req) {
+  const ip = getIP(req);
+  const month = getMonth();
+  if (!usageMap[ip] || usageMap[ip].month !== month) {
+    usageMap[ip] = { count: 0, month };
+  }
+  return usageMap[ip].count;
+}
+
+function incrementUsage(req) {
+  const ip = getIP(req);
+  usageMap[ip].count++;
+}
+
+app.get('/usage', (req, res) => {
+  const used = checkUsage(req);
+  res.json({ used, limit: FREE_LIMIT, remaining: Math.max(0, FREE_LIMIT - used) });
+});
+
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  // Check free limit
+  const used = checkUsage(req);
+  if (used >= FREE_LIMIT) {
+    fs.unlinkSync(req.file.path);
+    return res.status(429).json({ error: 'limit_reached' });
+  }
 
   const password = req.body.password || '';
   const pdfPath = req.file.path;
   const decryptedPath = pdfPath + '_decrypted.pdf';
 
   try {
-    let finalPath = pdfPath;
-
-    // Always try to open with pikepdf (handles encrypted + non-encrypted)
     await new Promise((resolve, reject) => {
       execFile('python3', [
         path.join(__dirname, 'decrypt.py'),
@@ -30,19 +66,13 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
         password
       ], (err, stdout, stderr) => {
         const output = (stdout || '').trim();
-        if (output === 'ok') {
-          resolve();
-        } else if (output === 'wrong_password') {
-          reject(new Error('wrong_password'));
-        } else {
-          reject(new Error('decrypt_failed'));
-        }
+        if (output === 'ok') resolve();
+        else if (output === 'wrong_password') reject(new Error('wrong_password'));
+        else reject(new Error('decrypt_failed'));
       });
     });
 
-    finalPath = decryptedPath;
-
-    const dataBuffer = fs.readFileSync(finalPath);
+    const dataBuffer = fs.readFileSync(decryptedPath);
     const pdfData = await pdfParse(dataBuffer);
     const rows = parseTransactions(pdfData.text);
 
@@ -52,6 +82,9 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     if (rows.length === 0) {
       return res.status(400).json({ error: 'No transactions found. The PDF format may not be supported yet.' });
     }
+
+    // Count successful conversion
+    incrementUsage(req);
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([
@@ -84,13 +117,11 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 function parseTransactions(text) {
   const rows = [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
   const datePattern = /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i;
   const amountPattern = /[\d,]+\.\d{2}/g;
 
   for (const line of lines) {
     if (!datePattern.test(line)) continue;
-
     const dateMatch = line.match(datePattern);
     const date = dateMatch[1];
     const rest = line.slice(date.length).trim();
@@ -104,7 +135,6 @@ function parseTransactions(text) {
 
     rows.push([date, description, debit, credit, balance]);
   }
-
   return rows;
 }
 

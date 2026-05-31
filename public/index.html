@@ -384,6 +384,7 @@
 
       <button class="convert-btn" id="convertBtn" disabled>Convert to Excel</button>
       <div id="status"></div>
+      <div id="usage-bar" style="margin-top:12px;font-size:13px;color:var(--gray-600);text-align:center"></div>
       <div class="secure-note">
         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
         Your file is never stored. Deleted immediately after conversion.
@@ -621,6 +622,17 @@
   <p style="margin-top:16px;font-size:12px">© 2026 Bank Statement Converter. Your data is never stored.</p>
 </footer>
 
+
+<!-- LIMIT MODAL -->
+<div id="limitModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:40px 32px;max-width:420px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:40px;margin-bottom:16px">🚫</div>
+    <h2 style="font-size:20px;font-weight:700;color:#0f1f3d;margin-bottom:10px">Free Limit Reached</h2>
+    <p style="font-size:14px;color:#475569;margin-bottom:24px">You have used all 5 free conversions this month. Upgrade to continue converting bank statements.</p>
+    <a href="#pricing" onclick="closeLimitModal()" style="display:block;background:#1a56db;color:#fff;padding:12px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;margin-bottom:10px">View Pricing Plans</a>
+    <button onclick="closeLimitModal()" style="background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer">Maybe later</button>
+  </div>
+</div>
 <script>
   // CONVERTER
   const dropZone = document.getElementById('dropZone');
@@ -657,6 +669,23 @@
     status.textContent = ''; status.className = '';
   }
 
+  // Load usage on page load
+  async function loadUsage() {
+    try {
+      const res = await fetch('/usage');
+      const data = await res.json();
+      const bar = document.getElementById('usage-bar');
+      if (data.remaining === 0) {
+        bar.innerHTML = '<span style="color:#dc2626">⚠ Free limit reached (5/5). <a href="#pricing" style="color:#1a56db">Upgrade to continue</a></span>';
+        convertBtn.disabled = true;
+        convertBtn.textContent = 'Limit Reached – Upgrade to Convert';
+      } else {
+        bar.textContent = data.remaining + ' free conversion' + (data.remaining !== 1 ? 's' : '') + ' remaining this month';
+      }
+    } catch(e) {}
+  }
+  loadUsage();
+
   convertBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
     convertBtn.disabled = true;
@@ -668,6 +697,9 @@
       const res = await fetch('/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const err = await res.json();
+        if (err.error === 'limit_reached') {
+          showLimitModal(); return;
+        }
         showError(err.error || 'Something went wrong.'); return;
       }
       const blob = await res.blob();
@@ -677,12 +709,19 @@
       URL.revokeObjectURL(url);
       status.textContent = '✓ Done! Your Excel file has been downloaded.';
       status.className = 'success';
+      loadUsage();
     } catch (e) {
       showError('Server error. Please try again.');
     } finally { convertBtn.disabled = false; }
   });
 
   function showError(msg) { status.textContent = msg; status.className = 'error'; }
+  function showLimitModal() {
+    document.getElementById('limitModal').style.display = 'flex';
+  }
+  function closeLimitModal() {
+    document.getElementById('limitModal').style.display = 'none';
+  }
 
   // FAQ
   document.querySelectorAll('.faq-q').forEach(btn => {
