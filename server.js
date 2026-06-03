@@ -139,3 +139,58 @@ function parseTransactions(text) {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`BankPDF running at http://localhost:${PORT}`));
+
+// ============ AUTH ADDITIONS ============
+require('dotenv').config();
+const session = require('express-session');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const mongoose = require('mongoose');
+
+// MongoDB User Model
+const userSchema = new mongoose.Schema({
+  googleId: String,
+  name: String,
+  email: String,
+  photo: String,
+  conversionsUsed: { type: Number, default: 0 },
+  conversionsMonth: { type: String, default: '' }
+});
+const User = mongoose.model('User', userSchema);
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI).then(() => console.log('MongoDB connected')).catch(err => console.error('MongoDB error:', err));
+
+// Session
+app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport Google Strategy
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: '/auth/google/callback'
+}, async (accessToken, refreshToken, profile, done) => {
+  let user = await User.findOne({ googleId: profile.id });
+  if (!user) {
+    user = await User.create({ googleId: profile.id, name: profile.displayName, email: profile.emails[0].value, photo: profile.photos[0].value });
+  }
+  return done(null, user);
+}));
+
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  const user = await User.findById(id);
+  done(null, user);
+});
+
+// Auth Routes
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
+app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
+app.get('/me', (req, res) => {
+  if (req.user) res.json({ loggedIn: true, name: req.user.name, email: req.user.email, photo: req.user.photo });
+  else res.json({ loggedIn: false });
+});
+// ============ END AUTH ============
