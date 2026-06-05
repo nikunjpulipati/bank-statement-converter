@@ -326,6 +326,7 @@
     <a href="#contact">Contact</a>
   </div>
   <a href="#converter" class="nav-cta">Convert Now</a>
+  <div id="auth-btn" style="margin-left:12px"></div>
 </nav>
 
 <!-- HERO -->
@@ -754,3 +755,22 @@
 </script>
 </body>
 </html>
+<script>
+  // Auth UI
+  async function loadAuthUI() {
+    const res = await fetch('/me');
+    const data = await res.json();
+    const el = document.getElementById('auth-btn');
+    if (data.loggedIn) {
+      el.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+        <img src="${data.photo}" style="width:32px;height:32px;border-radius:50%;" />
+        <span style="font-size:14px;font-weight:600">${data.name.split(' ')[0]}</span>
+        <a href="/logout" style="font-size:13px;color:#475569;text-decoration:none">Logout</a>
+      </div>`;
+    } else {
+      el.innerHTML = `<a href="/auth/google" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;padding:7px 14px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;color:#1e293b">
+        <img src="https://www.google.com/favicon.ico" style="width:16px;height:16px"/>Sign in with Google</a>`;
+    }
+  }
+  loadAuthUI();
+</script>
