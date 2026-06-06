@@ -199,3 +199,37 @@ app.get('/me', (req, res) => {
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err.message);
 });
+
+// ============ RAZORPAY ============
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
+
+const PLANS = {
+  basic: { amount: 29900, name: 'Basic Plan', conversions: 50 },
+  pro: { amount: 99900, name: 'Pro Plan', conversions: 200 },
+  business: { amount: 299900, name: 'Business Plan', conversions: 999999 }
+};
+
+app.post('/create-order', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Login required' });
+  const plan = PLANS[req.body.plan];
+  if (!plan) return res.status(400).json({ error: 'Invalid plan' });
+  const order = await razorpay.orders.create({ amount: plan.amount, currency: 'INR', receipt: `receipt_${Date.now()}` });
+  res.json({ orderId: order.id, amount: plan.amount, name: plan.name, key: process.env.RAZORPAY_KEY_ID });
+});
+
+app.post('/verify-payment', async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
+  const sign = razorpay_order_id + '|' + razorpay_payment_id;
+  const expectedSign = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(sign).digest('hex');
+  if (expectedSign !== razorpay_signature) return res.status(400).json({ error: 'Invalid payment' });
+  const p = PLANS[plan];
+  await User.findByIdAndUpdate(req.user._id, { plan, conversionsLimit: p.conversions });
+  res.json({ success: true });
+});
+// ============ END RAZORPAY ============
