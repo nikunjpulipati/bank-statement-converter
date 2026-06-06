@@ -777,7 +777,7 @@
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
 async function startPayment(plan) {
-  const me = await fetch('/me').then(r => r.json());
+  const me = await fetch('/me', { credentials: 'include' }).then(r => r.json());
   if (!me.loggedIn) { alert('Please sign in first to upgrade!'); window.location.href = '/auth/google'; return; }
   const order = await fetch('/create-order', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({plan}) }).then(r => r.json());
   const options = {
