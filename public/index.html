@@ -523,7 +523,7 @@
           <li>Excel download</li>
           <li>Priority processing</li>
         </ul>
-        <a href="#contact" class="plan-btn primary">Get Basic</a>
+        <button class="plan-btn primary" onclick="startPayment('basic')">Get Basic</button>
       </div>
       <div class="pricing-card">
         <div class="plan-name">Pro</div>
@@ -537,7 +537,7 @@
           <li>Priority processing</li>
           <li>Email support</li>
         </ul>
-        <a href="#contact" class="plan-btn">Get Pro</a>
+        <button class="plan-btn" onclick="startPayment('pro')">Get Pro</button>
       </div>
       <div class="pricing-card">
         <div class="plan-name">Business</div>
@@ -551,7 +551,7 @@
           <li>Priority processing</li>
           <li>Dedicated support</li>
         </ul>
-        <a href="#contact" class="plan-btn">Get Business</a>
+        <button class="plan-btn" onclick="startPayment('business')">Get Business</button>
       </div>
     </div>
   </div>
@@ -773,4 +773,27 @@
     }
   }
   loadAuthUI();
+</script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+async function startPayment(plan) {
+  const me = await fetch('/me').then(r => r.json());
+  if (!me.loggedIn) { alert('Please sign in first to upgrade!'); window.location.href = '/auth/google'; return; }
+  const order = await fetch('/create-order', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({plan}) }).then(r => r.json());
+  const options = {
+    key: order.key,
+    amount: order.amount,
+    currency: 'INR',
+    name: 'Bank Statement Converter',
+    description: order.name,
+    order_id: order.orderId,
+    handler: async function(response) {
+      const verify = await fetch('/verify-payment', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...response, plan}) }).then(r => r.json());
+      if (verify.success) { alert('Payment successful! Your plan has been upgraded.'); location.reload(); }
+    },
+    prefill: { name: me.name, email: me.email },
+    theme: { color: '#1a56db' }
+  };
+  new Razorpay(options).open();
+}
 </script>
