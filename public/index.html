@@ -779,7 +779,7 @@
 async function startPayment(plan) {
   const me = await fetch('/me', { credentials: 'include' }).then(r => r.json());
   if (!me.loggedIn) { alert('Please sign in first to upgrade!'); window.location.href = '/auth/google'; return; }
-  const order = await fetch('/create-order', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({plan}) }).then(r => r.json());
+  const order = await fetch('/create-order', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({plan}) }).then(r => r.json());
   const options = {
     key: order.key,
     amount: order.amount,
@@ -788,7 +788,7 @@ async function startPayment(plan) {
     description: order.name,
     order_id: order.orderId,
     handler: async function(response) {
-      const verify = await fetch('/verify-payment', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...response, plan}) }).then(r => r.json());
+      const verify = await fetch('/verify-payment', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...response, plan}) }).then(r => r.json());
       if (verify.success) { alert('Payment successful! Your plan has been upgraded.'); location.reload(); }
     },
     prefill: { name: me.name, email: me.email },
