@@ -779,7 +779,7 @@
 async function startPayment(plan) {
   const me = await fetch('/me').then(r => r.json());
   if (!me.loggedIn) { alert('Please sign in first to upgrade!'); window.location.href = '/auth/google'; return; }
-  const order = await fetch('/create-order', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({plan}) }).then(r => r.json());
+  const order = await fetch('/create-order', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({plan}) }).then(r => r.json());
   const options = {
     key: order.key,
     amount: order.amount,
