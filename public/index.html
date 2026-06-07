@@ -765,7 +765,7 @@
     if (data.loggedIn) {
       el.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
         <img src="${data.photo}" style="width:32px;height:32px;border-radius:50%;" />
-        <span style="font-size:14px;font-weight:600">${data.name.split(' ')[0]}</span>
+        <span style="font-size:14px;font-weight:600">${data.name.split(' ')[0]}</span><span style="font-size:11px;background:${data.plan==='pro'?'#7c3aed':data.plan==='business'?'#059669':data.plan==='basic'?'#1a56db':'#6b7280'};color:white;padding:2px 8px;border-radius:10px;font-weight:600;margin-left:4px;">${(data.plan||'free').toUpperCase()}</span>
         <a href="/logout" style="font-size:13px;color:#475569;text-decoration:none">Logout</a>
       </div>`;
     } else {
