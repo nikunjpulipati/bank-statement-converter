@@ -191,7 +191,7 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => res.redirect('/'));
 app.get('/logout', (req, res) => { req.logout(() => res.redirect('/')); });
 app.get('/me', (req, res) => {
-  if (req.user) res.json({ loggedIn: true, name: req.user.name, email: req.user.email, photo: req.user.photo });
+  if (req.user) res.json({ loggedIn: true, name: req.user.name, email: req.user.email, photo: req.user.photo, plan: req.user.plan });
   else res.json({ loggedIn: false });
 });
 // ============ END AUTH ============
