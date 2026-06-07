@@ -10,6 +10,7 @@ const os = require('os');
 const app = express();
 const upload = multer({ dest: os.tmpdir() });
 
+app.use(express.json());
 app.use(express.static('public'));
 
 // IP-based usage tracking
