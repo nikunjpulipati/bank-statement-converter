@@ -155,7 +155,9 @@ const userSchema = new mongoose.Schema({
   email: String,
   photo: String,
   conversionsUsed: { type: Number, default: 0 },
-  conversionsMonth: { type: String, default: '' }
+  conversionsMonth: { type: String, default: '' },
+  plan: { type: String, default: 'free' },
+  conversionsLimit: { type: Number, default: 5 }
 });
 const User = mongoose.model('User', userSchema);
 
