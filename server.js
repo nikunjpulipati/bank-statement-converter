@@ -231,6 +231,6 @@ app.post('/verify-payment', async (req, res) => {
   if (expectedSign !== razorpay_signature) return res.status(400).json({ error: 'Invalid payment' });
   const p = PLANS[plan];
   await User.findByIdAndUpdate(req.user._id, { plan, conversionsLimit: p.conversions });
-  res.json({ success: true });
+  req.user.plan = plan; req.user.conversionsLimit = p.conversionsLimit; res.json({ success: true });
 });
 // ============ END RAZORPAY ============
