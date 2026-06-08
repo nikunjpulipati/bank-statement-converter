@@ -15,7 +15,7 @@ app.use(express.static('public'));
 
 // IP-based usage tracking
 const usageMap = {};
-const FREE_LIMIT = 5;
+const FREE_LIMIT = 3;
 
 function getMonth() {
   const d = new Date();
