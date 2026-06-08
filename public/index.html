@@ -678,11 +678,11 @@
       const data = await res.json();
       const bar = document.getElementById('usage-bar');
       if (data.remaining === 0) {
-        bar.innerHTML = '<span style="color:#dc2626">⚠ Free limit reached (5/5). <a href="#pricing" style="color:#1a56db">Upgrade to continue</a></span>';
+        bar.innerHTML = '<span style="color:#dc2626">⚠ Free limit reached. <a href="#pricing" style="color:#1a56db">Upgrade to continue</a></span>';
         convertBtn.disabled = true;
         convertBtn.textContent = 'Limit Reached – Upgrade to Convert';
       } else {
-        bar.textContent = data.remaining + ' free conversion' + (data.remaining !== 1 ? 's' : '') + ' remaining this month';
+        bar.textContent = data.remaining + ' of 3 free conversions remaining this month';
       }
     } catch(e) {}
   }
