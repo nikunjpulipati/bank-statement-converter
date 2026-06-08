@@ -237,25 +237,18 @@ app.post('/verify-payment', async (req, res) => {
 });
 // ============ END RAZORPAY ============
 
-// ============ CONTACT FORM ============
-const nodemailer = require('nodemailer');
 
+
+// ============ CONTACT FORM ============
+const { Resend } = require('resend');
 app.post('/contact', async (req, res) => {
   const { name, email, message } = req.body;
   if (!name || !email || !message) return res.status(400).json({ error: 'All fields required' });
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD
-    }
-  });
-
+  const resend = new Resend(process.env.RESEND_API_KEY);
   try {
-    await transporter.sendMail({
-      from: `"Bank Statement Converter" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
+    await resend.emails.send({
+      from: 'Bank Statement Converter <onboarding@resend.dev>',
+      to: 'thenikunjpulipati@gmail.com',
       subject: `Contact Form: ${name}`,
       html: `<p><b>Name:</b> ${name}</p><p><b>Email:</b> ${email}</p><p><b>Message:</b><br>${message}</p>`
     });
