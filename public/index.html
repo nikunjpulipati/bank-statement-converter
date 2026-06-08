@@ -738,7 +738,7 @@
   });
 
   // CONTACT
-  function submitContact() {
+  async function submitContact() {
     const name = document.getElementById('contactName').value.trim();
     const email = document.getElementById('contactEmail').value.trim();
     const msg = document.getElementById('contactMsg').value.trim();
@@ -747,11 +747,29 @@
       statusEl.textContent = 'Please fill in all fields.';
       statusEl.style.color = '#dc2626'; return;
     }
-    statusEl.textContent = 'Thank you! We will get back to you soon.';
-    statusEl.style.color = '#16a34a';
-    document.getElementById('contactName').value = '';
-    document.getElementById('contactEmail').value = '';
-    document.getElementById('contactMsg').value = '';
+    statusEl.textContent = 'Sending...';
+    statusEl.style.color = '#475569';
+    try {
+      const res = await fetch('/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, message: msg })
+      });
+      const data = await res.json();
+      if (data.success) {
+        statusEl.textContent = 'Message sent! We will get back to you soon.';
+        statusEl.style.color = '#16a34a';
+        document.getElementById('contactName').value = '';
+        document.getElementById('contactEmail').value = '';
+        document.getElementById('contactMsg').value = '';
+      } else {
+        statusEl.textContent = 'Failed to send. Please try again.';
+        statusEl.style.color = '#dc2626';
+      }
+    } catch (e) {
+      statusEl.textContent = 'Server error. Please try again.';
+      statusEl.style.color = '#dc2626';
+    }
   }
 </script>
 </body>
